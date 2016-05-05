@@ -2,6 +2,7 @@ package com.gtfo.web.controller;
 
 import com.gtfo.common.utils.MapperUtils;
 import com.gtfo.service.MeetingRoomService;
+import com.gtfo.web.vo.FloorResponseVO;
 import com.gtfo.web.vo.MeetingResponseVO;
 import org.modelmapper.TypeToken;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,13 @@ public class MeetingRoomController {
     public List<MeetingResponseVO> meetingRoomLookup(@PathVariable String roomName) throws Exception {
         System.out.println("Received lookup request");
         return this.mapper.map(this.meetingRoomService.getMeetingRoomInfo(roomName), new TypeToken<List<MeetingResponseVO>>() {
+        }.getType());
+    }
+
+    @RequestMapping(value = "/lookup/floor/{floor}", method = RequestMethod.GET)
+    public List<MeetingResponseVO> meetingRoomFloorLookup(@PathVariable String floor) throws Exception {
+        System.out.println("Received floor lookup request");
+        return this.mapper.map(this.meetingRoomService.getFloorMeetingRoomInfo(floor), new TypeToken<List<FloorResponseVO>>() {
         }.getType());
     }
 

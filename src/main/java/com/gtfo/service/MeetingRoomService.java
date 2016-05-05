@@ -3,6 +3,7 @@ package com.gtfo.service;
 import com.gtfo.common.utils.RoomUtils;
 import com.gtfo.dao.MeetingRoomDAO;
 import com.gtfo.dao.dto.MeetingRoomRequestDTO;
+import com.gtfo.service.domain.FloorResponse;
 import com.gtfo.service.domain.MeetingResponse;
 import com.gtfo.web.config.DateUtils;
 import com.gtfo.web.config.Floor;
@@ -41,7 +42,7 @@ public class MeetingRoomService {
 
     public List<MeetingResponse> getMeetingRoomInfo(String roomName) {
 
-        List<AttendeeInfo> attendees = new ArrayList<AttendeeInfo>();
+        List<AttendeeInfo> attendees = new ArrayList<>();
         attendees.add(new AttendeeInfo(this.getEmailFromRoomName(roomName)));
 
         LocalDateTime start = dateUtils.getCurrentTime();
@@ -50,23 +51,59 @@ public class MeetingRoomService {
         List<MeetingResponse> meetingResponses = new ArrayList<>();
         Optional<GetUserAvailabilityResults> results = this.meetingRoomDAO.getMeetingRoomInfo(new MeetingRoomRequestDTO(attendees, start, end));
         if (!results.isPresent()) {
-            return new ArrayList<>();
+            return meetingResponses;
         }
         for (AttendeeAvailability attendeeAvailability : results.get().getAttendeesAvailability()) {
             if (attendeeAvailability.getErrorCode() == ServiceError.NoError) {
                 meetingResponses.addAll(attendeeAvailability.getCalendarEvents().stream().map(
-                        calendarEvent -> new MeetingResponse(calendarEvent.getDetails().getSubject(),
-                                dateUtils.convert(calendarEvent.getStartTime()).toString(),
-                                dateUtils.convert(calendarEvent.getEndTime()).toString()))
-                        .collect(Collectors.toList()));
+                    calendarEvent -> new MeetingResponse(calendarEvent.getDetails().getSubject(),
+                        dateUtils.convert(calendarEvent.getStartTime()).toString(),
+                        dateUtils.convert(calendarEvent.getEndTime()).toString()))
+                    .collect(Collectors.toList()));
             }
         }
         return meetingResponses;
+    }
 
+    public List<FloorResponse> getFloorMeetingRoomInfo(String floor) {
+
+        List<AttendeeInfo> attendees = new ArrayList<>();
+        LocalDateTime start = dateUtils.getCurrentTime();
+        LocalDateTime end = dateUtils.getCurrentTime().plusDays(1);
+
+        Optional<MeetingRoomConfig> meetingRoomConfigOptional = this.floorConfig.getFloors().stream()
+                .filter(floorConfig -> Floor.valueOf(floor) == floorConfig.getFloor()).findAny();
+        meetingRoomConfigOptional.get().getMeetingRooms().forEach(meetingRoom -> attendees.add(new AttendeeInfo(meetingRoom.getEmail())));
+
+        List<FloorResponse> floorResponseList = new ArrayList<>();
+        Optional<GetUserAvailabilityResults> results = this.meetingRoomDAO.getMeetingRoomInfo(new MeetingRoomRequestDTO(attendees, start, end));
+        if (!results.isPresent()) {
+            return floorResponseList;
+        }
+        for (AttendeeAvailability attendeeAvailability : results.get().getAttendeesAvailability()) {
+            if (attendeeAvailability.getErrorCode() == ServiceError.NoError) {
+                List<MeetingResponse> meetingResponses = new ArrayList<>();
+                FloorResponse floorResponse = new FloorResponse();
+                meetingResponses.addAll(attendeeAvailability.getCalendarEvents().stream().map(
+                    event ->  {
+                        Optional<MeetingRoomConfig.MeetingRoom> meetingRoomOptional = meetingRoomConfigOptional.get().getMeetingRooms().stream().filter(
+                                room -> StringUtils.isNotBlank(event.getDetails().getLocation()) && event.getDetails().getLocation().contains(room.getName())).findAny();
+                        if (meetingRoomOptional.isPresent()) {
+                            floorResponse.setName(meetingRoomOptional.get().getName());
+                        }
+                        return new MeetingResponse(event.getDetails().getSubject(),
+                                dateUtils.convert(event.getStartTime()).toString(),
+                                dateUtils.convert(event.getEndTime()).toString());
+                    }).collect(Collectors.toList()));
+                floorResponse.setSchedule(meetingResponses);
+                floorResponseList.add(floorResponse);
+            }
+        }
+        return floorResponseList;
     }
 
     public List<String> getAvailableMeetingRooms(String floor, String startTime) {
-        List<AttendeeInfo> attendees = new ArrayList<AttendeeInfo>();
+        List<AttendeeInfo> attendees = new ArrayList<>();
         List<String> unavailableRooms = new ArrayList<>();
         List<String> allRooms = new ArrayList<>();
 
